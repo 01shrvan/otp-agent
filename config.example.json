@@ -9,6 +9,7 @@
   "emailPrefix": "qa-follower",
   "otpRegex": "\\b\\d{4,8}\\b",
   "selectors": {
+    "openAuthDialog": "button[data-auth='login']",
     "emailInput": "input[type='email']",
     "passwordInput": "input[type='password']",
     "submitAuth": "button[type='submit']",

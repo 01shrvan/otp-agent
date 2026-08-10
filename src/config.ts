@@ -14,6 +14,7 @@ export type AgentConfig = {
   emailPrefix: string;
   otpRegex: string;
   selectors: {
+    openAuthDialog?: string;
     emailInput: string;
     passwordInput?: string;
     submitAuth: string;

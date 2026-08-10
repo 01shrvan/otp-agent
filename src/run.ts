@@ -39,6 +39,14 @@ try {
 
 async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
   await page.goto(config.signupUrl, { waitUntil: "domcontentloaded" });
+
+  if (config.selectors.openAuthDialog) {
+    const dialogTrigger = page.locator(config.selectors.openAuthDialog).first();
+    await dialogTrigger.waitFor({ state: "visible", timeout: 30000 });
+    await dialogTrigger.click();
+    await page.locator(config.selectors.emailInput).waitFor({ state: "visible", timeout: 10000 });
+  }
+
   await page.locator(config.selectors.emailInput).fill(inbox.email);
 
   if (config.selectors.passwordInput) {
