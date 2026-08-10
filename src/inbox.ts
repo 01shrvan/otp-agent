@@ -23,15 +23,15 @@ export async function createInbox(config: AgentConfig, index: number): Promise<T
 
 async function createMailosaurInbox(config: AgentConfig, index: number): Promise<TestInbox> {
   const apiKey = requiredEnv("MAILOSAUR_API_KEY");
-  const serverId = requiredEnv("MAILOSAUR_SERVER_ID");
-  const email = `${config.emailPrefix}-${Date.now()}-${index}@${serverId}.mailosaur.net`;
+  const serverId = normalizeMailosaurServerId(requiredEnv("MAILOSAUR_SERVER_ID"));
+  const email = `${config.emailPrefix}-${Date.now()}-${index}@${serverId}`;
 
   return {
     email,
     waitForOtp: () =>
       pollForOtp(config, async () => {
         const searchParams = new URLSearchParams({
-          server: serverId,
+          server: normalizeMailosaurServerId(serverId).split(".")[0],
           sentTo: email,
         });
         const response = await fetch(`https://mailosaur.com/api/messages/search?${searchParams}`, {
@@ -176,6 +176,14 @@ function requiredEnv(name: string): string {
   }
 
   return value;
+}
+
+function normalizeMailosaurServerId(serverId: string): string {
+  if (serverId.endsWith(".mailosaur.net")) {
+    return serverId;
+  }
+
+  return `${serverId}.mailosaur.net`;
 }
 
 function basicAuthHeaders(apiKey: string): HeadersInit {
