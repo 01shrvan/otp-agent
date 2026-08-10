@@ -1,0 +1,19 @@
+{
+  "baseUrl": "https://your-site.example",
+  "signupUrl": "https://your-site.example/signup",
+  "targetProfileUrl": "https://your-site.example/users/demo-account",
+  "maxUsers": 3,
+  "runDelayMs": 1500,
+  "password": "TestPassword123!",
+  "emailProvider": "mailosaur",
+  "emailPrefix": "qa-follower",
+  "otpRegex": "\\b\\d{4,8}\\b",
+  "selectors": {
+    "emailInput": "input[type='email']",
+    "passwordInput": "input[type='password']",
+    "submitAuth": "button[type='submit']",
+    "otpInput": "input[name='otp'], input[autocomplete='one-time-code']",
+    "submitOtp": "button[type='submit']",
+    "followButton": "button:has-text('Follow')"
+  }
+}
