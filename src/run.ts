@@ -1,4 +1,4 @@
-import { chromium, type Page } from "@playwright/test";
+import { chromium, type Locator, type Page } from "@playwright/test";
 import { loadConfig } from "./config.js";
 import { loadDotEnv } from "./env.js";
 import { createInbox, delay, type TestInbox } from "./inbox.js";
@@ -41,26 +41,46 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
   await page.goto(config.signupUrl, { waitUntil: "domcontentloaded" });
 
   if (config.selectors.openAuthDialog) {
-    const dialogTrigger = page.locator(config.selectors.openAuthDialog).first();
-    await dialogTrigger.waitFor({ state: "visible", timeout: 30000 });
-    await dialogTrigger.click();
-    await page.locator(config.selectors.emailInput).waitFor({ state: "visible", timeout: 10000 });
+    await visible(page, config.selectors.openAuthDialog).click();
+    console.log("      auth dialog opened");
   }
 
-  await page.locator(config.selectors.emailInput).fill(inbox.email);
+  if (config.selectors.authTab) {
+    await visible(page, config.selectors.authTab).click();
+    console.log("      auth tab selected");
+  }
+
+  const email = await visible(page, config.selectors.emailInput);
+  try {
+    await email.waitFor({ state: "visible", timeout: 15000 });
+  } catch {
+    throw new Error(
+      "Auth form never appeared. Check selectors.openAuthDialog (did the dialog open?) and selectors.emailInput (does it match the field name?).",
+    );
+  }
+  await email.fill(inbox.email);
+  console.log("      email entered");
 
   if (config.selectors.passwordInput) {
-    await page.locator(config.selectors.passwordInput).fill(config.password);
+    const password = await visible(page, config.selectors.passwordInput);
+    await password.waitFor({ state: "visible", timeout: 15000 });
+    await password.fill(config.password);
+    console.log("      password entered");
   }
 
-  await page.locator(config.selectors.submitAuth).click();
+  await page.keyboard.press("Enter");
+  console.log("      auth submitted");
 
   const otp = await inbox.waitForOtp();
+  console.log("      otp received from inbox");
 
-  await page.locator(config.selectors.otpInput).fill(otp);
+  const otpInput = await visible(page, config.selectors.otpInput);
+  await otpInput.waitFor({ state: "visible", timeout: 15000 });
+  await otpInput.fill(otp);
+  console.log("      otp entered");
 
   if (config.selectors.submitOtp) {
-    await page.locator(config.selectors.submitOtp).click();
+    await visible(page, config.selectors.submitOtp).click();
   } else {
     await page.keyboard.press("Enter");
   }
@@ -70,8 +90,14 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
 
 async function followTarget(page: Page): Promise<void> {
   await page.goto(config.targetProfileUrl, { waitUntil: "domcontentloaded" });
-  const followButton = page.locator(config.selectors.followButton).first();
+
+  const followButton = await visible(page, config.selectors.followButton);
   await followButton.waitFor({ state: "visible", timeout: 30000 });
   await followButton.click();
+  console.log("      follow clicked");
   await page.waitForLoadState("networkidle").catch(() => undefined);
+}
+
+function visible(page: Page, selector: string): Locator {
+  return page.locator(selector).filter({ visible: true }).first();
 }
