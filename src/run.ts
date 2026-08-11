@@ -9,6 +9,47 @@ loadDotEnv();
 
 const config = loadConfig();
 
+const FIRST_NAMES = [
+  "alex", "mia", "jordan", "casey", "riley", "sam", "taylor", "morgan", "jamie",
+  "dylan", "avery", "cameron", "logan", "quinn", "blake", "skylar", "kai", "leo",
+  "nina", "zoe", "liam", "noah", "emma", "olivia", "luna", "isaac", "maya", "eli",
+  "ruby", "jasper", "nora", "felix", "aiden", "isla", "milo", "aria", "theo",
+  "hazel", "owen", "vera", "jude", "iris", "rowan", "cleo", "atlas", "wren",
+  "callum", "sienna", "diego", "amelia", "marcus", "sofia", "ethan", "chloe",
+  "ryan", "grace", "caleb", "naomi", "sebastian", "clara",
+];
+
+const USERNAME_WORDS = [
+  "wolf", "storm", "night", "blaze", "frost", "raven", "hawk", "fox", "moon",
+  "star", "river", "sky", "ember", "shadow", "nova", "dawn", "mist", "pine",
+  "clover", "juno", "echo", "sage", "cinder", "delta", "orbit", "vega",
+  "haven", "orion", "willow", "jasmine",
+];
+
+const usedUsernames = new Set<string>();
+
+function randomUsername(): string {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const name = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)];
+    const word = USERNAME_WORDS[Math.floor(Math.random() * USERNAME_WORDS.length)];
+    const num = Math.floor(Math.random() * 90) + 10;
+    const style = Math.floor(Math.random() * 4);
+
+    const candidate =
+      style === 0 ? `${name}${num}`
+      : style === 1 ? `${name}_${num}`
+      : style === 2 ? `${name}_${word}`
+      : `${name}${word}${num}`;
+
+    if (!usedUsernames.has(candidate)) {
+      usedUsernames.add(candidate);
+      return candidate;
+    }
+  }
+
+  throw new Error("Could not generate a unique username");
+}
+
 const browser = await chromium.launch({
   headless: process.env.HEADLESS !== "false",
   args: ["--disable-blink-features=AutomationControlled"],
@@ -79,7 +120,7 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
 
   if (config.selectors.usernameInput) {
     const username = await waitVisible(page, config.selectors.usernameInput, "usernameInput", 15000);
-    await username.fill(usernameFromEmail(inbox.email));
+    await username.fill(randomUsername());
     console.log("      username entered");
   }
 
@@ -180,13 +221,6 @@ async function clickVisibleIfFound(
   } catch {
     return false;
   }
-}
-
-function usernameFromEmail(email: string): string {
-  return email
-    .split("@")[0]
-    .replace(/[^a-zA-Z0-9_]/g, "_")
-    .slice(0, 24);
 }
 
 async function waitForAppReady(page: Page, selector: string): Promise<void> {

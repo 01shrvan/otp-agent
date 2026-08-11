@@ -32,10 +32,14 @@ async function createMailosaurInbox(config: AgentConfig, index: number): Promise
       pollForOtp(config, async () => {
         const searchParams = new URLSearchParams({
           server: normalizeMailosaurServerId(serverId).split(".")[0],
-          sentTo: email,
         });
         const response = await fetch(`https://mailosaur.com/api/messages/search?${searchParams}`, {
-          headers: basicAuthHeaders(apiKey),
+          method: "POST",
+          headers: {
+            ...basicAuthHeaders(apiKey),
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ sentTo: email }),
         });
 
         if (!response.ok) {
