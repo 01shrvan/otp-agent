@@ -8,6 +8,7 @@ import { createInbox, delay, type TestInbox } from "./inbox.js";
 loadDotEnv();
 
 const config = loadConfig();
+assertConfiguredForOwnedTarget();
 
 const browser = await chromium.launch({
   headless: process.env.HEADLESS !== "false",
@@ -47,6 +48,7 @@ try {
 async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
   await page.goto(config.signupUrl, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
+  await assertPageLoadedApp(page);
 
   const authFormIsOpen = await hasVisible(page, config.selectors.emailInput);
   if (config.selectors.openAuthDialog && !authFormIsOpen) {
@@ -106,6 +108,8 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
 
 async function followTarget(page: Page): Promise<void> {
   await page.goto(config.targetProfileUrl, { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
+  await assertPageLoadedApp(page);
 
   const followButton = await waitVisible(page, config.selectors.followButton, "followButton", 30000);
   await followButton.click();
@@ -147,6 +151,43 @@ function usernameFromEmail(email: string): string {
     .split("@")[0]
     .replace(/[^a-zA-Z0-9_]/g, "_")
     .slice(0, 24);
+}
+
+function assertConfiguredForOwnedTarget(): void {
+  const configuredUrls = [config.signupUrl, config.targetProfileUrl];
+  const blockedHost = configuredUrls.find((url) => {
+    try {
+      const hostname = new URL(url).hostname.replace(/^www\./, "");
+      return hostname === "kick.com";
+    } catch {
+      return false;
+    }
+  });
+
+  if (blockedHost) {
+    throw new Error(
+      [
+        "config.json is still pointed at https://kick.com/.",
+        "Set baseUrl, signupUrl, and targetProfileUrl to your hosted clone domain before running.",
+        "Playwright opens its own browser; you do not need to open a browser manually.",
+      ].join(" "),
+    );
+  }
+}
+
+async function assertPageLoadedApp(page: Page): Promise<void> {
+  const bodyText = (await page.locator("body").innerText({ timeout: 5000 }).catch(() => "")).trim();
+
+  if (/Request blocked by security policy/i.test(bodyText)) {
+    throw new Error(
+      [
+        "The configured site returned `Request blocked by security policy` before the app loaded.",
+        `URL: ${page.url()}`,
+        "This is a hosting/security/WAF response, not a selector issue.",
+        "Allow Playwright/test traffic in your hosted clone security settings or run against a test/staging route that serves the app.",
+      ].join(" "),
+    );
+  }
 }
 
 async function selectorErrorMessage(
