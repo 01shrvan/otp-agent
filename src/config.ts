@@ -24,6 +24,7 @@ export type AgentConfig = {
     submitAuth?: string;
     otpInput: string;
     submitOtp?: string;
+    resendOtpButton?: string;
     followButton: string;
   };
 };

@@ -10,13 +10,27 @@ loadDotEnv();
 const config = loadConfig();
 
 const FIRST_NAMES = [
-  "alex", "mia", "jordan", "casey", "riley", "sam", "taylor", "morgan", "jamie",
-  "dylan", "avery", "cameron", "logan", "quinn", "blake", "skylar", "kai", "leo",
-  "nina", "zoe", "liam", "noah", "emma", "olivia", "luna", "isaac", "maya", "eli",
-  "ruby", "jasper", "nora", "felix", "aiden", "isla", "milo", "aria", "theo",
-  "hazel", "owen", "vera", "jude", "iris", "rowan", "cleo", "atlas", "wren",
-  "callum", "sienna", "diego", "amelia", "marcus", "sofia", "ethan", "chloe",
-  "ryan", "grace", "caleb", "naomi", "sebastian", "clara",
+  "aarohi", "aadya", "advait", "anvi", "aarush", "arnav", "avni", "anaya", "anika",
+  "bhavya", "chaitanya", "devansh", "diya", "darsh", "eshaan", "gauri", "harshita",
+  "ishir", "ishaan", "jhanvi", "kavya", "krish", "lavanya", "mihir", "manasvi",
+  "navya", "nysa", "ojas", "omkar", "prisha", "pari", "rudra", "reyansh", "shlok",
+  "saanvi", "shanaya", "tanisha", "vaanya", "vivaan", "vihaan", "yashvi", "zoya",
+  "ishita", "karthik", "nandini", "yuvaan", "aditya", "ananya", "arjun", "avinash",
+  "bharat", "chetan", "dhanush", "gaurav", "hemant", "isa", "jay", "karan",
+  "lakshya", "manas", "neel", "ojasvi", "pranav", "raghav", "riya", "sahil",
+  "tanvi", "urja", "varun", "yash", "zaara", "aman", "bhavna", "deepika", "girish",
+  "indira", "kirti", "mansi", "nitin", "pooja", "ritu", "sameer", "tejas", "uday",
+  "vidhi", "yuvraj", "ziya",
+];
+
+const SURNAMES = [
+  "sharma", "verma", "iyer", "nair", "kapoor", "malhotra", "mehta", "rao", "joshi",
+  "desai", "chopra", "agarwal", "gupta", "sethi", "kohli", "batra", "grewal", "sodhi",
+  "dutta", "bose", "ghosh", "mukherjee", "banerjee", "singh", "kumar", "patel",
+  "shah", "jain", "saxena", "tripathi", "tiwari", "mishra", "dwivedi", "chauhan",
+  "rathore", "gill", "dhillon", "chhabra", "bhatt", "thakur", "negi", "rawat",
+  "pandey", "srivastava", "kulkarni", "deshmukh", "patil", "gaikwad", "shetty",
+  "menon", "pillai", "reddy", "naidu", "prasad", "yadav", "khan", "ansari",
 ];
 
 const USERNAME_WORDS = [
@@ -28,18 +42,43 @@ const USERNAME_WORDS = [
 
 const usedUsernames = new Set<string>();
 
+const USERNAME_TAKEN_PATTERN =
+  /\b(username|name|handle)\b[^]{0,80}\b(already taken|already in use|in use|not available|taken|unavailable)\b|\b(already taken|already in use|in use|taken|unavailable)\b[^]{0,80}\b(username|name|handle)\b/i;
+
+function pick<T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function randomSuffix(): number {
+  const roll = Math.random();
+
+  if (roll < 0.2) return Math.floor(Math.random() * 90000) + 10000;
+  if (roll < 0.4) return Math.floor(Math.random() * 9000) + 1000;
+  if (roll < 0.55) return Math.floor(Math.random() * 900) + 100;
+  if (roll < 0.75) return Math.floor(Math.random() * 90) + 10;
+  return Math.floor(Math.random() * 10) + 2004;
+}
+
 function randomUsername(): string {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    const name = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)];
-    const word = USERNAME_WORDS[Math.floor(Math.random() * USERNAME_WORDS.length)];
-    const num = Math.floor(Math.random() * 90) + 10;
-    const style = Math.floor(Math.random() * 4);
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    const name = pick(FIRST_NAMES);
+    const surname = pick(SURNAMES);
+    const word = pick(USERNAME_WORDS);
+    const num = randomSuffix();
+    const style = Math.floor(Math.random() * 7);
 
     const candidate =
       style === 0 ? `${name}${num}`
       : style === 1 ? `${name}_${num}`
-      : style === 2 ? `${name}_${word}`
-      : `${name}${word}${num}`;
+      : style === 2 ? `${name}_${surname}`
+      : style === 3 ? `${name}${surname}${num}`
+      : style === 4 ? `${name}_${surname}_${num}`
+      : style === 5 ? `${name}${word}${num}`
+      : `${name}${surname}`;
+
+    if (candidate.length > 24) {
+      continue;
+    }
 
     if (!usedUsernames.has(candidate)) {
       usedUsernames.add(candidate);
@@ -101,7 +140,14 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
 
   const authFormIsOpen = await hasVisible(page, config.selectors.emailInput);
   if (config.selectors.openAuthDialog && !authFormIsOpen) {
-    await clickVisible(page, config.selectors.openAuthDialog, "openAuthDialog", 15000);
+    const opened = await openAuthDialog(page);
+
+    if (!opened) {
+      throw new Error(
+        `Auth dialog did not open. ${await selectorErrorMessage(page, "emailInput", config.selectors.emailInput)}`,
+      );
+    }
+
     console.log("      auth dialog opened");
   }
 
@@ -136,18 +182,74 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
     console.log("      password entered");
   }
 
-  if (config.selectors.submitAuth) {
-    const submitted = await clickVisibleIfFound(page, config.selectors.submitAuth, "submitAuth", 5000);
-    if (!submitted) {
-      console.log("      submit button not found, pressing Enter");
+  let authSubmitted = false;
+
+  for (let attempt = 1; attempt <= 12; attempt += 1) {
+    if (config.selectors.submitAuth) {
+      const didSubmit = await clickVisibleIfFound(page, config.selectors.submitAuth, "submitAuth", 5000);
+      if (!didSubmit) {
+        console.log("      submit button not found, pressing Enter");
+        await page.keyboard.press("Enter");
+      }
+    } else {
       await page.keyboard.press("Enter");
     }
-  } else {
-    await page.keyboard.press("Enter");
+
+    await delay(2500);
+
+    const errorLines = await pageErrorLines(page);
+    if (errorLines.length > 0) {
+      console.log(`      form messages: ${errorLines.join(" | ")}`);
+    }
+
+    if (
+      config.selectors.usernameInput &&
+      errorLines.some((line) => USERNAME_TAKEN_PATTERN.test(line))
+    ) {
+      console.log(`      username already taken, retrying with a new one (${attempt}/12)`);
+      const username = await waitVisible(page, config.selectors.usernameInput, "usernameInput", 10000);
+      await username.click();
+      await username.press("Control+A");
+      await username.fill(randomUsername());
+      await username.press("Tab");
+      await delay(1500);
+      continue;
+    }
+
+    authSubmitted = true;
+    break;
   }
+
+  if (!authSubmitted) {
+    throw new Error("Could not submit the signup form after 6 attempts.");
+  }
+
   console.log("      auth submitted");
 
-  const otp = await inbox.waitForOtp();
+  const otpInputAppeared = await waitVisible(page, config.selectors.otpInput, "otpInput", 15000)
+    .then(() => true)
+    .catch(() => false);
+
+  let otp: string;
+  const resendTimer = setInterval(() => {
+    if (config.selectors.resendOtpButton) {
+      clickVisibleIfFound(page, config.selectors.resendOtpButton, "resendOtpButton", 1500).catch(
+        () => undefined,
+      );
+    }
+  }, 45000);
+
+  try {
+    otp = await inbox.waitForOtp();
+  } catch (error) {
+    const detail = await selectorErrorMessage(page, "otpInput", config.selectors.otpInput);
+    throw new Error(
+      `Timed out waiting for OTP email (OTP input visible on page: ${otpInputAppeared}).\n${detail}`,
+      { cause: error },
+    );
+  } finally {
+    clearInterval(resendTimer);
+  }
   console.log("      otp received from inbox");
 
   const otpInput = await waitVisible(page, config.selectors.otpInput, "otpInput", 15000);
@@ -223,6 +325,28 @@ async function clickVisibleIfFound(
   }
 }
 
+async function openAuthDialog(page: Page): Promise<boolean> {
+  const dialogSelector = "[role='dialog'], [class*='modal'], [data-testid*='modal']";
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const formVisible = await waitVisible(page, config.selectors.emailInput, "emailInput", 10000)
+      .then(() => true)
+      .catch(() => false);
+
+    if (formVisible) {
+      return true;
+    }
+
+    const dialogVisible = await hasVisible(page, dialogSelector);
+    if (!dialogVisible && config.selectors.openAuthDialog) {
+      await clickVisibleIfFound(page, config.selectors.openAuthDialog, "openAuthDialog", 8000);
+      await delay(2500);
+    }
+  }
+
+  return false;
+}
+
 async function waitForAppReady(page: Page, selector: string): Promise<void> {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     const ready = await visible(page, selector)
@@ -244,6 +368,22 @@ async function waitForAppReady(page: Page, selector: string): Promise<void> {
   throw new Error(
     "App did not become interactive after 3 attempts. The site is likely blocking automated browsers (anti-bot/WAF). Try HEADLESS=false so the browser window is visible.",
   );
+}
+
+async function pageErrorLines(page: Page): Promise<string[]> {
+  const body = await page.locator("body").innerText({ timeout: 3000 }).catch(() => "");
+  return body
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        line.length > 1 &&
+        line.length < 200 &&
+        /\b(error|taken|invalid|already|required|verify|code|check your email|not available|try again)\b/i.test(
+          line,
+        ),
+    )
+    .slice(0, 8);
 }
 
 async function selectorErrorMessage(

@@ -71,6 +71,8 @@ async function createMailosaurInbox(config: AgentConfig, index: number): Promise
           html?: { body?: string };
         };
 
+        console.log(`      email received: "${message.subject ?? "(no subject)"}"`);
+
         return {
           subject: message.subject,
           body: [message.text?.body, message.html?.body].filter(Boolean).join("\n"),
