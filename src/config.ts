@@ -10,14 +10,18 @@ export type AgentConfig = {
   maxUsers: number;
   runDelayMs: number;
   password: string;
+  birthdate?: string;
   emailProvider: EmailProviderName;
   emailPrefix: string;
   otpRegex: string;
   selectors: {
     openAuthDialog?: string;
+    authTab?: string;
     emailInput: string;
+    usernameInput?: string;
+    birthdateInput?: string;
     passwordInput?: string;
-    submitAuth: string;
+    submitAuth?: string;
     otpInput: string;
     submitOtp?: string;
     followButton: string;

@@ -46,8 +46,10 @@ try {
 
 async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
   await page.goto(config.signupUrl, { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
 
-  if (config.selectors.openAuthDialog) {
+  const authFormIsOpen = await hasVisible(page, config.selectors.emailInput);
+  if (config.selectors.openAuthDialog && !authFormIsOpen) {
     await clickVisible(page, config.selectors.openAuthDialog, "openAuthDialog");
     console.log("      auth dialog opened");
   }
@@ -60,6 +62,18 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
   const email = await waitVisible(page, config.selectors.emailInput, "emailInput", 15000);
   await email.fill(inbox.email);
   console.log("      email entered");
+
+  if (config.selectors.usernameInput) {
+    const username = await waitVisible(page, config.selectors.usernameInput, "usernameInput", 15000);
+    await username.fill(usernameFromEmail(inbox.email));
+    console.log("      username entered");
+  }
+
+  if (config.selectors.birthdateInput && config.birthdate) {
+    const birthdate = await waitVisible(page, config.selectors.birthdateInput, "birthdateInput", 15000);
+    await birthdate.fill(config.birthdate);
+    console.log("      birthdate entered");
+  }
 
   if (config.selectors.passwordInput) {
     const password = await waitVisible(page, config.selectors.passwordInput, "passwordInput", 15000);
@@ -103,6 +117,10 @@ function visible(page: Page, selector: string): Locator {
   return page.locator(selector).filter({ visible: true }).first();
 }
 
+async function hasVisible(page: Page, selector: string): Promise<boolean> {
+  return (await visible(page, selector).count()) > 0;
+}
+
 async function waitVisible(
   page: Page,
   selector: string,
@@ -122,6 +140,13 @@ async function waitVisible(
 async function clickVisible(page: Page, selector: string, selectorName: string): Promise<void> {
   const locator = await waitVisible(page, selector, selectorName, 30000);
   await locator.click();
+}
+
+function usernameFromEmail(email: string): string {
+  return email
+    .split("@")[0]
+    .replace(/[^a-zA-Z0-9_]/g, "_")
+    .slice(0, 24);
 }
 
 async function selectorErrorMessage(
