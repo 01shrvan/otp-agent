@@ -210,7 +210,7 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
       const username = await waitVisible(page, config.selectors.usernameInput, "usernameInput", 10000);
       await username.click();
       await username.press("Control+A");
-      await username.fill(randomUsername());
+      await username.type(randomUsername(), { delay: 40 });
       await username.press("Tab");
       await delay(1500);
       continue;
@@ -221,7 +221,7 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
   }
 
   if (!authSubmitted) {
-    throw new Error("Could not submit the signup form after 6 attempts.");
+    throw new Error("Could not submit the signup form after 12 attempts.");
   }
 
   console.log("      auth submitted");
