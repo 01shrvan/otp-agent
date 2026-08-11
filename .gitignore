@@ -4,3 +4,4 @@ config.json
 dist/
 playwright-report/
 test-results/
+failure-artifacts/

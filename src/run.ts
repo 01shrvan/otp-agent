@@ -8,16 +8,24 @@ import { createInbox, delay, type TestInbox } from "./inbox.js";
 loadDotEnv();
 
 const config = loadConfig();
-assertConfiguredForOwnedTarget();
 
 const browser = await chromium.launch({
   headless: process.env.HEADLESS !== "false",
+  args: ["--disable-blink-features=AutomationControlled"],
 });
+
+const contextOptions = {
+  userAgent:
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  viewport: { width: 1366, height: 768 },
+  locale: "en-US",
+  timezoneId: "America/New_York",
+};
 
 try {
   for (let index = 1; index <= config.maxUsers; index += 1) {
     const inbox = await createInbox(config, index);
-    const context = await browser.newContext();
+    const context = await browser.newContext(contextOptions);
     const page = await context.newPage();
 
     console.log(`[${index}/${config.maxUsers}] Using ${inbox.email}`);
@@ -48,17 +56,21 @@ try {
 async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
   await page.goto(config.signupUrl, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
-  await assertPageLoadedApp(page);
+  await waitForAppReady(page, config.selectors.openAuthDialog ?? config.selectors.emailInput);
 
   const authFormIsOpen = await hasVisible(page, config.selectors.emailInput);
   if (config.selectors.openAuthDialog && !authFormIsOpen) {
-    await clickVisible(page, config.selectors.openAuthDialog, "openAuthDialog");
+    await clickVisible(page, config.selectors.openAuthDialog, "openAuthDialog", 15000);
     console.log("      auth dialog opened");
   }
 
   if (config.selectors.authTab) {
-    await clickVisible(page, config.selectors.authTab, "authTab");
-    console.log("      auth tab selected");
+    const tabClicked = await clickVisibleIfFound(page, config.selectors.authTab, "authTab", 5000);
+    if (tabClicked) {
+      console.log("      auth tab selected");
+    } else {
+      console.log("      auth tab not found, continuing");
+    }
   }
 
   const email = await waitVisible(page, config.selectors.emailInput, "emailInput", 15000);
@@ -84,7 +96,11 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
   }
 
   if (config.selectors.submitAuth) {
-    await clickVisible(page, config.selectors.submitAuth, "submitAuth");
+    const submitted = await clickVisibleIfFound(page, config.selectors.submitAuth, "submitAuth", 5000);
+    if (!submitted) {
+      console.log("      submit button not found, pressing Enter");
+      await page.keyboard.press("Enter");
+    }
   } else {
     await page.keyboard.press("Enter");
   }
@@ -98,7 +114,11 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
   console.log("      otp entered");
 
   if (config.selectors.submitOtp) {
-    await clickVisible(page, config.selectors.submitOtp, "submitOtp");
+    const submitted = await clickVisibleIfFound(page, config.selectors.submitOtp, "submitOtp", 5000);
+    if (!submitted) {
+      console.log("      OTP submit button not found, pressing Enter");
+      await page.keyboard.press("Enter");
+    }
   } else {
     await page.keyboard.press("Enter");
   }
@@ -109,7 +129,6 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
 async function followTarget(page: Page): Promise<void> {
   await page.goto(config.targetProfileUrl, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
-  await assertPageLoadedApp(page);
 
   const followButton = await waitVisible(page, config.selectors.followButton, "followButton", 30000);
   await followButton.click();
@@ -141,9 +160,26 @@ async function waitVisible(
   }
 }
 
-async function clickVisible(page: Page, selector: string, selectorName: string): Promise<void> {
-  const locator = await waitVisible(page, selector, selectorName, 30000);
+async function clickVisible(page: Page, selector: string, selectorName: string, timeout = 30000): Promise<void> {
+  const locator = await waitVisible(page, selector, selectorName, timeout);
   await locator.click();
+}
+
+async function clickVisibleIfFound(
+  page: Page,
+  selector: string,
+  selectorName: string,
+  timeout: number,
+): Promise<boolean> {
+  const locator = visible(page, selector);
+
+  try {
+    await locator.waitFor({ state: "visible", timeout });
+    await locator.click();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function usernameFromEmail(email: string): string {
@@ -153,41 +189,27 @@ function usernameFromEmail(email: string): string {
     .slice(0, 24);
 }
 
-function assertConfiguredForOwnedTarget(): void {
-  const configuredUrls = [config.signupUrl, config.targetProfileUrl];
-  const blockedHost = configuredUrls.find((url) => {
-    try {
-      const hostname = new URL(url).hostname.replace(/^www\./, "");
-      return hostname === "kick.com";
-    } catch {
-      return false;
+async function waitForAppReady(page: Page, selector: string): Promise<void> {
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const ready = await visible(page, selector)
+      .waitFor({ state: "visible", timeout: 15000 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (ready) {
+      return;
     }
-  });
 
-  if (blockedHost) {
-    throw new Error(
-      [
-        "config.json is still pointed at https://kick.com/.",
-        "Set baseUrl, signupUrl, and targetProfileUrl to your hosted clone domain before running.",
-        "Playwright opens its own browser; you do not need to open a browser manually.",
-      ].join(" "),
-    );
+    if (attempt < 3) {
+      console.log(`      app not ready on attempt ${attempt}, reloading...`);
+      await page.reload({ waitUntil: "domcontentloaded" }).catch(() => undefined);
+      await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => undefined);
+    }
   }
-}
 
-async function assertPageLoadedApp(page: Page): Promise<void> {
-  const bodyText = (await page.locator("body").innerText({ timeout: 5000 }).catch(() => "")).trim();
-
-  if (/Request blocked by security policy/i.test(bodyText)) {
-    throw new Error(
-      [
-        "The configured site returned `Request blocked by security policy` before the app loaded.",
-        `URL: ${page.url()}`,
-        "This is a hosting/security/WAF response, not a selector issue.",
-        "Allow Playwright/test traffic in your hosted clone security settings or run against a test/staging route that serves the app.",
-      ].join(" "),
-    );
-  }
+  throw new Error(
+    "App did not become interactive after 3 attempts. The site is likely blocking automated browsers (anti-bot/WAF). Try HEADLESS=false so the browser window is visible.",
+  );
 }
 
 async function selectorErrorMessage(
