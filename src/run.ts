@@ -20,7 +20,19 @@ const FIRST_NAMES = [
   "lakshya", "manas", "neel", "ojasvi", "pranav", "raghav", "riya", "sahil",
   "tanvi", "urja", "varun", "yash", "zaara", "aman", "bhavna", "deepika", "girish",
   "indira", "kirti", "mansi", "nitin", "pooja", "ritu", "sameer", "tejas", "uday",
-  "vidhi", "yuvraj", "ziya",
+  "vidhi", "yuvraj", "ziya", "hana", "yuki", "aiko", "mei", "rena", "kyra", "mika",
+  "lena", "ines", "nova", "ava", "eira", "freya", "sylvie", "opal", "fern", "hazel",
+  "mabel", "ollie", "teddy", "benji", "charlie", "bailey", "skye", "robin", "jules",
+  "marlowe", "sasha", "tatum", "winston", "gus", "milo", "otto", "zane", "beau",
+  "juno", "wren", "august", "celeste", "dahlia", "esme", "flora", "genevieve",
+  "hollis", "irving", "jasper", "kipling", "lavender", "magnolia", "noel", "opal",
+  "pearl", "quill", "rosemary", "sage", "tallulah", "ulysses", "violet", "willow",
+  "ximena", "yara", "zelda", "amelia", "bryce", "colby", "drew", "ellis", "finch",
+  "gray", "hunter", "indigo", "jayce", "knox", "lennox", "maddox", "nico", "oskar",
+  "phoenix", "quade", "rowan", "sutton", "troy", "ulric", "vaughn", "west", "xeno",
+  "yasmin", "zephyr", "aki", "bo", "cato", "delta", "ember", "falcon", "gizmo",
+  "harley", "iguana", "jett", "koda", "luna", "max", "nemo", "otis", "panda", "rex",
+  "simba", "tiger", "uni", "vin", "wolf", "yogi", "zorro",
 ];
 
 const SURNAMES = [
@@ -37,7 +49,11 @@ const USERNAME_WORDS = [
   "wolf", "storm", "night", "blaze", "frost", "raven", "hawk", "fox", "moon",
   "star", "river", "sky", "ember", "shadow", "nova", "dawn", "mist", "pine",
   "clover", "juno", "echo", "sage", "cinder", "delta", "orbit", "vega",
-  "haven", "orion", "willow", "jasmine",
+  "haven", "orion", "willow", "jasmine", "chase", "buddy", "rocky", "pebbles",
+  "lucky", "coco", "zeus", "apollo", "comet", "bandit", "clover", "diesel", "echo",
+  "frankie", "ginger", "holly", "indie", "jake", "kobe", "leo", "mango", "nibbles",
+  "oakley", "pixel", "quinn", "rosie", "sunny", "taco", "umber", "velvet", "whiskey",
+  "zara",
 ];
 
 const usedUsernames = new Set<string>();
@@ -183,12 +199,16 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
   }
 
   let authSubmitted = false;
+  let lastUsername = "";
 
   for (let attempt = 1; attempt <= 12; attempt += 1) {
     if (config.selectors.submitAuth) {
-      const didSubmit = await clickVisibleIfFound(page, config.selectors.submitAuth, "submitAuth", 5000);
-      if (!didSubmit) {
-        console.log("      submit button not found, pressing Enter");
+      const button = visible(page, config.selectors.submitAuth);
+      const enabled = await button.isEnabled().catch(() => false);
+      if (enabled) {
+        await button.click();
+      } else {
+        console.log("      submit button disabled, pressing Enter");
         await page.keyboard.press("Enter");
       }
     } else {
@@ -202,22 +222,43 @@ async function signupAndVerify(page: Page, inbox: TestInbox): Promise<void> {
       console.log(`      form messages: ${errorLines.join(" | ")}`);
     }
 
-    if (
-      config.selectors.usernameInput &&
-      errorLines.some((line) => USERNAME_TAKEN_PATTERN.test(line))
-    ) {
-      console.log(`      username already taken, retrying with a new one (${attempt}/12)`);
-      const username = await waitVisible(page, config.selectors.usernameInput, "usernameInput", 10000);
+    const taken =
+      config.selectors.usernameInput !== undefined &&
+      errorLines.some((line) => USERNAME_TAKEN_PATTERN.test(line));
+
+    if (!taken) {
+      authSubmitted = true;
+      break;
+    }
+
+    console.log(`      username already taken, retrying with a new one (${attempt}/12)`);
+
+    if (!config.selectors.usernameInput) {
+      throw new Error("usernameInput selector is required.");
+    }
+
+    const username = await waitVisible(page, config.selectors.usernameInput, "usernameInput", 10000);
+    await username.click();
+    await username.press("Control+A");
+    await username.type(randomUsername(), { delay: 40 });
+    await username.press("Tab");
+
+    const newValue = await username.inputValue().catch(() => "");
+
+    if (newValue === lastUsername) {
+      console.log("      WARNING: field value did not change, retyping");
       await username.click();
       await username.press("Control+A");
       await username.type(randomUsername(), { delay: 40 });
       await username.press("Tab");
-      await delay(1500);
-      continue;
     }
 
-    authSubmitted = true;
-    break;
+    lastUsername = (await username.inputValue().catch(() => "")) || lastUsername;
+    console.log(`      field now contains: ${lastUsername}`);
+
+    const errorCleared = await waitForTextGone(page, "already taken", 6000);
+    console.log(errorCleared ? "      validation cleared, resubmitting" : "      error still present, trying next name");
+    await delay(500);
   }
 
   if (!authSubmitted) {
@@ -384,6 +425,20 @@ async function pageErrorLines(page: Page): Promise<string[]> {
         ),
     )
     .slice(0, 8);
+}
+
+async function waitForTextGone(page: Page, snippet: string, timeout: number): Promise<boolean> {
+  const deadline = Date.now() + timeout;
+
+  while (Date.now() < deadline) {
+    const body = await page.locator("body").innerText({ timeout: 2000 }).catch(() => "");
+    if (!body.toLowerCase().includes(snippet.toLowerCase())) {
+      return true;
+    }
+    await delay(600);
+  }
+
+  return false;
 }
 
 async function selectorErrorMessage(
